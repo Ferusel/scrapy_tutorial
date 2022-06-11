@@ -12,15 +12,15 @@ class QuotesSpider(scrapy.Spider):
         self.logger.info("hello this is my first spider")
         quotes = response.css('div.quote')
         for quote in quotes:
-            yield {
-                'text': quote.xpath('.//span[@class="text"]/text()').get(),
-                'author': quote.xpath('.//span[2]/small[@class="author"]/text()').get(),
-                'tags': quote.xpath('.//div[@class="tags"]/a/text()').getall(),
-            }
+            loader = ItemLoader(item=QuoteItem(), selector=quote)
+            loader.add_xpath('quote_content', './/span[@class="text"]/text()')
+            loader.add_xpath(
+                'tags', './/div[@class="tags"]/a/text()')
+            quote_item = loader.load_item()
 
             author_url = quote.xpath('.//span[2]/a/@href').get()
             self.logger.info("Grabbing author URL: " + str(author_url))
-            yield scrapy.Request(url=response.urljoin(author_url), callback=self.parse_author)
+            yield scrapy.Request(url=response.urljoin(author_url), callback=self.parse_author, meta={'quote_item': quote_item})
 
         next_page = response.xpath(
             '//ul[@class="pager"]/li[@class="next"]/a/@href').get()
@@ -31,9 +31,13 @@ class QuotesSpider(scrapy.Spider):
             yield scrapy.Request(url=response.urljoin(next_page), callback=self.parse)
 
     def parse_author(self, response):
-        yield {
-            'author_name': response.xpath('//h3[@class="author-title"]').get(),
-            'author_birthday': response.xpath('//span[@class="author-born-date"]').get(),
-            'author_bornlocation': response.xpath('//span[@class="author-born-location"]').get(),
-            'author_bio': response.xpath('//div[@class="author-description"]').get()
-        }
+        quote_item = response.meta['quote_item']
+        loader = ItemLoader(item=quote_item, response=response)
+        loader.add_xpath("author_name", '//h3[@class="author-title"]/text()')
+        loader.add_xpath("author_birthday",
+                         '//span[@class="author-born-date"]/text()')
+        loader.add_xpath("author_bornlocation",
+                         '//span[@class="author-born-location"]/text()')
+        loader.add_xpath(
+            "author_bio", '//div[@class="author-description"]/text()')
+        yield loader.load_item()
